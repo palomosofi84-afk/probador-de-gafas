@@ -1,0 +1,435 @@
+// Probador virtual de gafas: detecta la cara (MediaPipe Face Landmarker),
+// mide la escala real con el iris y pone la montura a su ancho real en mm.
+import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODELO = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const HEIC_LIB = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
+
+const IRIS_MM = 11.7;      // diámetro medio del iris humano
+const DIP_MM = 63;         // distancia interpupilar media de un adulto
+const ANCLA_Y = 0.46;      // altura de la pupila dentro de la imagen de la montura (0 = arriba)
+const MAX_LADO = 1600;     // reducir fotos grandes antes de analizarlas
+// Las gafas quedan ~12 mm por delante del ojo, o sea un poco más cerca de la
+// cámara que el iris con el que medimos: a distancia de selfie se ven ~3% más grandes.
+const PLANO_GAFAS = 1.03;
+
+const $ = (id) => document.getElementById(id);
+const lienzo = $("lienzo"), ctx = lienzo.getContext("2d");
+const lienzo3d = $("lienzo3d");
+let visor = null;   // visor 3D (si el navegador tiene WebGL)
+const video = $("video");
+const catalogo = window.CATALOGO || [];
+
+const estado = {
+  sel: 0,
+  fuente: null,          // canvas (foto) o video
+  modo: null,            // "foto" | "camara"
+  cara: null,            // parámetros calculados de la cara
+  suave: null,           // parámetros suavizados (cámara)
+  sinGafas: false,
+  ajY: 0,
+  dp: +localStorage.getItem("dp") || 0,   // distancia pupilar de la persona, si la sabe
+  lm: null,               // puntos de la cara de la foto (para recalcular)
+  dipCam: [],             // DP medida en cada cuadro de la cámara
+  imgs: {},
+};
+
+/* ---------- Catálogo ---------- */
+const cop = (n) => "COP$" + n.toLocaleString("es-CO");
+// Filtros: Mujer y Hombre incluyen las unisex; De sol muestra solo las de sol
+const FILTROS = {
+  todas: () => true,
+  mujer: (g) => !g.sol && g.genero !== "hombre",
+  hombre: (g) => !g.sol && g.genero !== "mujer",
+  sol: (g) => g.sol,
+};
+let visibles = catalogo.map((_, i) => i);
+function filtrar(f) {
+  visibles = catalogo.map((g, i) => (FILTROS[f](g) ? i : -1)).filter((i) => i >= 0);
+  document.querySelectorAll(".filtro").forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === f));
+  pintarTarjetas();
+  elegir(visibles.includes(estado.sel) ? estado.sel : visibles[0]);
+}
+function pintarTarjetas() {
+  const mitad = Math.ceil(visibles.length / 2);
+  [$("tiraIzq"), $("tiraDer")].forEach((tira, t) => {
+    tira.innerHTML = "";
+    tira.scrollTo(0, 0);
+    visibles.slice(t ? mitad : 0, t ? undefined : mitad).forEach((i) => {
+      const g = catalogo[i];
+      const b = document.createElement("button");
+      b.className = "tarjeta";
+      b.dataset.i = i;
+      b.setAttribute("aria-pressed", i === estado.sel);
+      b.innerHTML = `<img src="${g.img}" alt="" loading="lazy"><b>${g.nombre}</b><span>${cop(g.precio)}</span>`;
+      b.onclick = () => elegir(i);
+      tira.appendChild(b);
+    });
+  });
+}
+function mover(paso) {
+  const k = visibles.indexOf(estado.sel);
+  elegir(visibles[(k + paso + visibles.length) % visibles.length]);
+}
+function elegir(i) {
+  estado.sel = i;
+  document.querySelectorAll(".tarjeta").forEach((b) => b.setAttribute("aria-pressed", +b.dataset.i === estado.sel));
+  const g = catalogo[estado.sel];
+  $("bImg").src = g.img;
+  $("bNombre").textContent = g.nombre;
+  $("bTipo").textContent = `${g.tipo} · ${g.talla}`;
+  $("bAncho").textContent = `${g.anchoMm} mm`;
+  $("bPrecio").textContent = cop(g.precio);
+  $("bAntes").textContent = g.antes ? cop(g.antes) : "";
+  $("bLink").href = g.url;
+  actualizarEncaje();
+  dibujar();
+}
+function cargarImgs() {
+  catalogo.forEach((g) => { const im = new Image(); im.src = g.img; im.onload = dibujar; estado.imgs[g.id] = im; });
+}
+
+/* ---------- Detector ---------- */
+let detectorP = null, modoDetector = null;
+function detector() {
+  if (!detectorP) {
+    detectorP = (async () => {
+      const files = await FilesetResolver.forVisionTasks(WASM);
+      const crear = (delegate) => FaceLandmarker.createFromOptions(files, {
+        baseOptions: { modelAssetPath: MODELO, delegate },
+        runningMode: "IMAGE", numFaces: 1,
+      });
+      let d;
+      try { d = await crear("GPU"); } catch { d = await crear("CPU"); }
+      modoDetector = "IMAGE";
+      return d;
+    })();
+    detectorP.catch(() => { detectorP = null; });
+  }
+  return detectorP;
+}
+async function usarModo(d, modo) {
+  if (modoDetector !== modo) { await d.setOptions({ runningMode: modo }); modoDetector = modo; }
+}
+
+/* ---------- Geometría de la cara ---------- */
+function medirCara(lm, W, H) {
+  const P = (i) => ({ x: lm[i].x * W, y: lm[i].y * H, z: lm[i].z * W });
+  const d2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const d3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+  const pD = P(468), pI = P(473);                 // centro de cada iris
+  const dip2 = d2(pD, pI), dip3 = d3(pD, pI);
+  const giro = Math.min(1, Math.max(0.55, dip2 / dip3));
+  // Diámetro del iris: promedio de los dos ojos, en horizontal (corregido por el
+  // giro de la cabeza) y en vertical. Es la regla de medir: casi todos los
+  // adultos tienen el iris de ~11,7 mm, sin importar el tamaño de la cara.
+  const iris = (d2(P(469), P(471)) / giro + d2(P(470), P(472)) + d2(P(474), P(476)) / giro + d2(P(475), P(477))) / 4;
+  let pxmm, fuente;
+  if (estado.dp) { pxmm = dip3 / estado.dp; fuente = "dp"; }     // la medida exacta de la persona
+  else {
+    pxmm = iris / IRIS_MM; fuente = "iris";
+    // si el iris salió muy raro (foto borrosa, ojos entrecerrados), usar la DP promedio
+    const r = pxmm / (dip3 / DIP_MM);
+    if (!(r > 0.72 && r < 1.38)) { pxmm = dip3 / DIP_MM; fuente = "promedio"; }
+  }
+  const xs = lm.map((p) => p.x * W), ys = lm.map((p) => p.y * H);
+  // Orientación de la cabeza en 3D (x: hacia la derecha de la imagen,
+  // y: hacia arriba, z: hacia la cámara), sacada de los ojos y de frente-mentón
+  const T = (i) => { const q = P(i); return { x: q.x, y: -q.y, z: -q.z }; };
+  const resta = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+  const ejes = ortonormal(resta(T(263), T(33)), resta(T(10), T(152)));
+  return {
+    cx: (pD.x + pI.x) / 2, cy: (pD.y + pI.y) / 2, cz: (pD.z + pI.z) / 2, ejes,
+    ang: Math.atan2(pI.y - pD.y, pI.x - pD.x),
+    pxmm, fuente,
+    dipMm: dip3 / pxmm, dip3,
+    giro,   // achatar la montura si la cabeza gira
+    anchoCaraMm: d3(P(127), P(356)) / pxmm,
+    caja: { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) },
+  };
+}
+function ortonormal(vx, vy) {
+  const n = (v) => { const l = Math.hypot(v.x, v.y, v.z) || 1; return { x: v.x / l, y: v.y / l, z: v.z / l }; };
+  const x = n(vx);
+  const d = vy.x * x.x + vy.y * x.y + vy.z * x.z;
+  const y = n({ x: vy.x - x.x * d, y: vy.y - x.y * d, z: vy.z - x.z * d });
+  const z = { x: x.y * y.z - x.z * y.y, y: x.z * y.x - x.x * y.z, z: x.x * y.y - x.y * y.x };
+  return { x, y, z };
+}
+function mezclar(a, b, k) {
+  if (!a) return structuredClone(b);
+  const m = (u, v) => u + (v - u) * k;
+  const mv = (u, v) => ({ x: m(u.x, v.x), y: m(u.y, v.y), z: m(u.z, v.z) });
+  return {
+    cz: m(a.cz, b.cz), ejes: ortonormal(mv(a.ejes.x, b.ejes.x), mv(a.ejes.y, b.ejes.y)),
+    cx: m(a.cx, b.cx), cy: m(a.cy, b.cy), ang: m(a.ang, b.ang), pxmm: m(a.pxmm, b.pxmm), giro: m(a.giro, b.giro),
+    anchoCaraMm: m(a.anchoCaraMm, b.anchoCaraMm), dipMm: m(a.dipMm, b.dipMm), fuente: b.fuente,
+    caja: { x0: m(a.caja.x0, b.caja.x0), x1: m(a.caja.x1, b.caja.x1), y0: m(a.caja.y0, b.caja.y0), y1: m(a.caja.y1, b.caja.y1) },
+  };
+}
+
+/* ---------- Dibujo ---------- */
+function ajustarLienzo() {
+  const r = lienzo.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (lienzo.width !== w || lienzo.height !== h) { lienzo.width = w; lienzo.height = h; }
+}
+function dibujar() {
+  ajustarLienzo();
+  const W = lienzo.width, H = lienzo.height;
+  ctx.clearRect(0, 0, W, H);
+  const f = estado.fuente, c = estado.modo === "camara" ? estado.suave : estado.cara;
+  if (!f || !c) return;
+  const sw = f.videoWidth || f.width, sh = f.videoHeight || f.height;
+
+  // Encuadre de cerca: la cara ocupa ~50% de la altura del espejo
+  const altoCara = c.caja.y1 - c.caja.y0;
+  let ch = altoCara / 0.5, cw = ch * (W / H);
+  const ccx = (c.caja.x0 + c.caja.x1) / 2, ccy = c.cy + altoCara * 0.02;
+  let sx = ccx - cw / 2, sy = ccy - ch / 2;
+  // si el recorte se sale de la foto, ampliarlo para no mostrar bordes vacíos
+  const esc = Math.max(1, cw / sw, ch / sh);
+  if (esc > 1) { cw /= esc; ch /= esc; sx = ccx - cw / 2; sy = ccy - ch / 2; }
+  sx = Math.min(Math.max(sx, 0), Math.max(0, sw - cw));
+  sy = Math.min(Math.max(sy, 0), Math.max(0, sh - ch));
+  const k = W / cw;
+
+  ctx.save();
+  if (estado.modo === "camara") { ctx.translate(W, 0); ctx.scale(-1, 1); }  // efecto espejo
+  ctx.drawImage(f, sx, sy, cw, ch, 0, 0, W, H);
+
+  const g = catalogo[estado.sel], im = g && estado.imgs[g.id];
+  if (visor) {
+    // Gafas en 3D (siguen el giro de la cabeza; se ven las patas)
+    lienzo3d.style.transform = estado.modo === "camara" ? "scaleX(-1)" : "";
+    if (g) g._img = im;
+    visor.dibujar({
+      W, H,
+      gafa: !estado.sinGafas && im && im.complete && im.naturalWidth ? g : null,
+      pos: { x: (c.cx - sx) * k, y: (c.cy - sy) * k },
+      ejes: c.ejes,
+      esc: c.pxmm * k,   // la perspectiva ya agranda lo que está más cerca (el frente)
+      // cámara típica de celular/computador: distancia focal ≈ 0,75 × el lado largo de la imagen
+      centro: { x: (sw / 2 - sx) * k, y: (sh / 2 - sy) * k },
+      focal: 0.75 * Math.max(sw, sh) * k,
+      ajYmm: -estado.ajY * 0.5,
+      caraMm: c.anchoCaraMm,
+    });
+  } else if (!estado.sinGafas && im && im.complete && im.naturalWidth) {
+    const pxmm = c.pxmm * k;
+    const gw = g.anchoMm * pxmm * PLANO_GAFAS;   // ancho real de la montura
+    const gh = gw * im.naturalHeight / im.naturalWidth;
+    ctx.translate((c.cx - sx) * k, (c.cy - sy) * k);
+    ctx.rotate(c.ang);
+    ctx.scale(c.giro, 1);
+    ctx.shadowColor = "rgba(30,20,10,.30)";
+    ctx.shadowBlur = gw * 0.012;
+    ctx.shadowOffsetY = gw * 0.012;
+    ctx.drawImage(im, -gw / 2, -gh * ANCLA_Y + estado.ajY * 0.5 * pxmm, gw, gh);
+  }
+  ctx.restore();
+}
+
+/* ---------- Ajuste de talla ---------- */
+function actualizarEncaje() {
+  const c = estado.modo === "camara" ? estado.suave : estado.cara;
+  const box = $("bEncajeBox"), el = $("bEncaje");
+  if (!c) { box.hidden = true; return; }
+  const dif = catalogo[estado.sel].anchoMm - c.anchoCaraMm;
+  box.hidden = false;
+  if (dif > 8) { el.textContent = "Algo ancha"; el.className = "ancha"; }
+  else if (dif < -10) { el.textContent = "Algo angosta"; el.className = "angosta"; }
+  else { el.textContent = "Buen tamaño"; el.className = "ok"; }
+  box.title = `Tu cara mide aprox. ${Math.round(c.anchoCaraMm)} mm a la altura de las sienes; esta montura ${catalogo[estado.sel].anchoMm} mm.`;
+}
+
+/* ---------- Cómo se midió el tamaño ---------- */
+function mediana(a) { const b = [...a].sort((x, y) => x - y); return b[b.length >> 1]; }
+function pintarEscala() {
+  const c = estado.modo === "camara" ? estado.suave : estado.cara, el = $("escala");
+  if (!c) { el.hidden = true; return; }
+  el.hidden = false;
+  const fuente = estado.dp ? "dp" : c.fuente;
+  el.className = "escala " + (fuente === "dp" ? "exacta" : "aprox");
+  el.textContent = fuente === "dp"
+    ? `📏 Tamaño real · calibrado con tu DP de ${estado.dp} mm`
+    : fuente === "iris"
+      ? `📏 Tamaño real aprox. (±5%) · tu DP estimada: ${Math.round(c.dipMm)} mm · ¿Sabes tu DP?`
+      : `📏 Tamaño aproximado · escribe tu DP para que sea exacto`;
+}
+
+/* ---------- Estados de la interfaz ---------- */
+function mostrarEstado(txt, error = false) {
+  const e = $("estado");
+  e.hidden = !txt; e.classList.toggle("error", error); $("estadoTxt").textContent = txt || "";
+}
+function modoProbando(on) {
+  $("vacio").hidden = on; $("herramientas").hidden = !on;
+  if (!on) $("ajustes").hidden = true;
+}
+
+/* ---------- Foto ---------- */
+async function aImagen(file) {
+  const esHeic = /hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+  const abrir = (blob) => new Promise((ok, mal) => {
+    const url = URL.createObjectURL(blob), im = new Image();
+    im.onload = () => ok(im); im.onerror = mal; im.src = url;
+  });
+  try { return await abrir(file); }
+  catch (e) {
+    if (!esHeic) throw e;
+    // Fotos de iPhone (HEIC): la mayoría de navegadores no las leen, se convierten a JPG
+    mostrarEstado("Convirtiendo foto de iPhone…");
+    if (!window.heic2any) await new Promise((ok, mal) => {
+      const s = document.createElement("script"); s.src = HEIC_LIB; s.onload = ok; s.onerror = mal; document.head.appendChild(s);
+    });
+    const jpg = await window.heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+    return abrir(Array.isArray(jpg) ? jpg[0] : jpg);
+  }
+}
+async function usarFoto(file) {
+  if (!file) return;
+  pararCamara();
+  mostrarEstado("Buscando tu cara…");
+  try {
+    const [im, d] = await Promise.all([aImagen(file), detector()]);
+    const s = Math.min(1, MAX_LADO / Math.max(im.naturalWidth, im.naturalHeight));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(im.naturalWidth * s); cv.height = Math.round(im.naturalHeight * s);
+    cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+    await usarModo(d, "IMAGE");
+    const res = d.detect(cv);
+    if (!res.faceLandmarks?.length) {
+      mostrarEstado("No encontramos una cara. Prueba con una foto de frente, con buena luz y sin nada tapando los ojos.", true);
+      return;
+    }
+    estado.fuente = cv; estado.modo = "foto";
+    estado.lm = res.faceLandmarks[0];
+    estado.cara = medirCara(estado.lm, cv.width, cv.height);
+    modoProbando(true); mostrarEstado("");
+    pintarEscala();
+    actualizarEncaje(); dibujar();
+  } catch (e) {
+    console.error(e);
+    mostrarEstado("No pudimos abrir esa foto. Prueba con otra (JPG o PNG).", true);
+  }
+}
+
+/* ---------- Cámara ---------- */
+let corriendo = false, ultimoT = -1;
+async function usarCamara() {
+  if (!navigator.mediaDevices?.getUserMedia) { mostrarEstado("Este navegador no permite usar la cámara. Sube una foto.", true); return; }
+  mostrarEstado("Abriendo la cámara…");
+  try {
+    const [stream, d] = await Promise.all([
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false }),
+      detector(),
+    ]);
+    video.srcObject = stream; await video.play();
+    await usarModo(d, "VIDEO");
+    estado.fuente = video; estado.modo = "camara"; estado.suave = null; estado.dipCam = [];
+    corriendo = true; modoProbando(true);
+    mostrarEstado("Mira de frente a la cámara…");
+    const bucle = () => {
+      if (!corriendo) return;
+      const t = performance.now();
+      if (video.readyState >= 2 && t !== ultimoT) {
+        ultimoT = t;
+        const res = d.detectForVideo(video, t);
+        if (res.faceLandmarks?.length) {
+          const c = medirCara(res.faceLandmarks[0], video.videoWidth, video.videoHeight);
+          // La escala en mm cambia cuando te acercas o alejas, pero tu DP no:
+          // se toma la mediana de muchos cuadros y con ella se fija la escala.
+          if (c.fuente === "iris") {
+            estado.dipCam.push(c.dipMm);
+            if (estado.dipCam.length > 90) estado.dipCam.shift();
+            const dip = mediana(estado.dipCam);
+            const nuevo = c.dip3 / dip;
+            c.anchoCaraMm = c.anchoCaraMm * c.pxmm / nuevo;
+            c.pxmm = nuevo; c.dipMm = dip;
+          }
+          const primera = !estado.suave;
+          estado.suave = mezclar(estado.suave, c, 0.45);
+          if (primera) { mostrarEstado(""); actualizarEncaje(); }
+          if (primera || estado.dipCam.length % 15 === 0) pintarEscala();
+        }
+        dibujar();
+      }
+      requestAnimationFrame(bucle);
+    };
+    bucle();
+    clearInterval(usarCamara.t);
+    usarCamara.t = setInterval(() => corriendo && actualizarEncaje(), 800);
+  } catch (e) {
+    console.error(e);
+    const negado = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+    mostrarEstado(negado ? "No diste permiso para la cámara. Puedes subir una foto." : "No pudimos abrir la cámara. Puedes subir una foto.", true);
+    if (!estado.fuente) modoProbando(false);
+  }
+}
+function pararCamara() {
+  corriendo = false;
+  const s = video.srcObject; if (s) s.getTracks().forEach((t) => t.stop());
+  video.srcObject = null;
+}
+
+/* ---------- Eventos ---------- */
+$("archivo").onchange = (e) => { usarFoto(e.target.files[0]); e.target.value = ""; };
+$("btnCamara").onclick = usarCamara;
+$("btnCamara2").onclick = usarCamara;
+$("btnOtra").onclick = () => $("archivo").click();
+$("btnAjustar").onclick = () => {
+  const a = $("ajustes"); a.hidden = !a.hidden; $("btnAjustar").setAttribute("aria-expanded", !a.hidden);
+};
+$("ajY").oninput = (e) => { estado.ajY = +e.target.value; dibujar(); };
+$("ajReset").onclick = () => { estado.ajY = 0; $("ajY").value = 0; dibujar(); };
+$("dp").value = estado.dp || "";
+$("dp").oninput = (e) => {
+  const v = parseFloat(String(e.target.value).replace(",", "."));
+  estado.dp = v >= 45 && v <= 80 ? v : 0;      // rango real de DP en adultos
+  if (estado.dp) localStorage.setItem("dp", estado.dp); else localStorage.removeItem("dp");
+  if (estado.modo === "foto" && estado.lm) estado.cara = medirCara(estado.lm, estado.fuente.width, estado.fuente.height);
+  estado.dipCam = []; estado.suave = null;
+  pintarEscala(); actualizarEncaje(); dibujar();
+};
+$("escala").onclick = () => { $("ajustes").hidden = false; $("btnAjustar").setAttribute("aria-expanded", true); $("dp").focus(); };
+$("btnComparar").onclick = () => {
+  estado.sinGafas = !estado.sinGafas;
+  $("btnComparar").textContent = estado.sinGafas ? "◑ Con gafas" : "◐ Sin gafas";
+  dibujar();
+};
+$("btnBajar").onclick = () => {
+  // juntar la foto y las gafas 3D (con su sombra) en una sola imagen
+  const out = document.createElement("canvas");
+  out.width = lienzo.width; out.height = lienzo.height;
+  const o = out.getContext("2d");
+  o.drawImage(lienzo, 0, 0);
+  if (visor) {
+    o.save();
+    if (estado.modo === "camara") { o.translate(out.width, 0); o.scale(-1, 1); }
+    o.filter = `drop-shadow(0 ${out.width * 0.006}px ${out.width * 0.006}px rgba(30,20,10,.35))`;
+    o.drawImage(lienzo3d, 0, 0);
+    o.restore();
+  }
+  out.toBlob((b) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b); a.download = `probador-${catalogo[estado.sel].nombre}.jpg`; a.click();
+  }, "image/jpeg", 0.92);
+};
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowRight") mover(1);
+  if (e.key === "ArrowLeft") mover(-1);
+});
+// arrastrar una foto al espejo
+$("espejo").addEventListener("dragover", (e) => e.preventDefault());
+$("espejo").addEventListener("drop", (e) => { e.preventDefault(); usarFoto(e.dataTransfer.files[0]); });
+new ResizeObserver(dibujar).observe(lienzo);
+
+document.querySelectorAll(".filtro").forEach((b) => (b.onclick = () => filtrar(b.dataset.f)));
+pintarTarjetas(); cargarImgs(); elegir(0);
+import("./gafas3d.js")
+  .then((m) => { visor = m.crearVisor3D(lienzo3d, () => requestAnimationFrame(dibujar)); dibujar(); })
+  .catch((e) => { console.warn("Sin 3D, se usa la vista plana:", e); lienzo3d.hidden = true; });
+detector().catch(() => {});   // ir cargando el modelo mientras la persona elige foto

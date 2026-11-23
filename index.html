@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probador de gafas · demo</title>
+<link rel="stylesheet" href="estilos.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="marca">PROBADOR<span>de gafas</span></div>
+  <div class="aviso">Demo · catálogo de firmoo.com.co</div>
+</header>
+
+<nav class="filtros" id="filtros" aria-label="Filtrar monturas">
+  <button class="filtro" data-f="todas" aria-pressed="true">Todas</button>
+  <button class="filtro" data-f="mujer" aria-pressed="false">Mujer</button>
+  <button class="filtro" data-f="hombre" aria-pressed="false">Hombre</button>
+  <button class="filtro" data-f="sol" aria-pressed="false">De sol</button>
+</nav>
+
+<main class="sala">
+  <aside class="tira" id="tiraIzq" aria-label="Monturas"></aside>
+
+  <section class="espejo-wrap">
+    <div class="espejo" id="espejo">
+      <canvas id="lienzo" aria-label="Tu cara con las gafas puestas"></canvas>
+      <canvas id="lienzo3d" aria-hidden="true"></canvas>
+      <video id="video" playsinline muted></video>
+
+      <div class="vacio" id="vacio">
+        <svg viewBox="0 0 120 120" class="silueta" aria-hidden="true">
+          <circle cx="60" cy="52" r="30" fill="none" stroke="currentColor" stroke-width="2"/>
+          <path d="M22 116c4-22 20-32 38-32s34 10 38 32" fill="none" stroke="currentColor" stroke-width="2"/>
+          <g fill="none" stroke="currentColor" stroke-width="2.4">
+            <rect x="35" y="44" width="20" height="14" rx="5"/><rect x="65" y="44" width="20" height="14" rx="5"/>
+            <path d="M55 50h10"/>
+          </g>
+        </svg>
+        <h1>Mira cómo te quedan</h1>
+        <p>Sube una foto de frente o usa tu cámara. Las gafas se ponen a su tamaño real sobre tu cara.</p>
+        <div class="acciones">
+          <label class="btn primario">Subir mi foto<input type="file" id="archivo" accept="image/*,.heic,.heif" hidden></label>
+          <button class="btn" id="btnCamara">Usar mi cámara</button>
+        </div>
+        <small>🔒 Tu foto no sale de tu dispositivo.</small>
+      </div>
+
+      <button class="escala" id="escala" hidden></button>
+      <div class="estado" id="estado" hidden><span class="spin"></span><span id="estadoTxt">Buscando tu cara…</span></div>
+
+      <div class="herramientas" id="herramientas" hidden>
+        <button class="chip" id="btnOtra" title="Cambiar foto">↺ Otra foto</button>
+        <button class="chip" id="btnCamara2" title="Usar cámara">◉ Cámara</button>
+        <button class="chip" id="btnAjustar" aria-expanded="false">⚙ Ajustar</button>
+        <button class="chip" id="btnComparar" title="Mantén presionado para ver sin gafas">◐ Sin gafas</button>
+        <button class="chip" id="btnBajar" title="Descargar foto">⤓ Guardar</button>
+      </div>
+
+      <div class="ajustes" id="ajustes" hidden>
+        <label>Altura <input type="range" id="ajY" min="-30" max="30" value="0"></label>
+        <button class="chip" id="ajReset">Centrar</button>
+        <div class="dp">
+          <label for="dp">Tu distancia pupilar (DP)</label>
+          <div><input id="dp" type="number" inputmode="decimal" min="45" max="80" step="0.5" placeholder="Ej. 62"> mm</div>
+          <small>Viene en tu fórmula de gafas (dice "DP" o "PD"). Con ella el tamaño queda exacto. Si no la sabes, la calculamos con tu iris.</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="tira" id="tiraDer" aria-label="Más monturas"></aside>
+</main>
+
+<footer class="barra" id="barra">
+  <img id="bImg" alt="">
+  <div class="binfo">
+    <strong id="bNombre"></strong>
+    <span id="bTipo"></span>
+  </div>
+  <div class="bmedida" title="Ancho total de la montura">
+    <span>Ancho</span><strong id="bAncho"></strong>
+  </div>
+  <div class="bmedida encaje" id="bEncajeBox" hidden title="Comparado con el ancho de tu cara">
+    <span>En tu cara</span><strong id="bEncaje"></strong>
+  </div>
+  <div class="bprecio"><s id="bAntes"></s><strong id="bPrecio"></strong></div>
+  <a class="btn primario" id="bLink" target="_blank" rel="noopener">Ver en la tienda</a>
+</footer>
+
+<script src="catalogo.js"></script>
+<script type="module" src="probador.js"></script>
+</body>
+</html>
