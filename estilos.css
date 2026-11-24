@@ -12,33 +12,27 @@ body{
   background:
     radial-gradient(1200px 600px at 50% -10%, #fbf8f3 0%, transparent 60%),
     linear-gradient(180deg, var(--arena) 0%, var(--arena2) 100%);
-  display:flex; flex-direction:column; min-height:100vh;
+  display:flex; flex-direction:column; height:100vh; overflow:hidden;
 }
-.top{display:flex;justify-content:space-between;align-items:center;padding:18px 28px}
-.marca{font-weight:800;letter-spacing:.32em;font-size:15px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 24px;flex:none}
+.marca{font-weight:800;letter-spacing:.32em;font-size:15px;white-space:nowrap}
 .marca span{font-weight:400;letter-spacing:.04em;margin-left:10px;color:var(--suave);font-size:14px}
-.aviso{font-size:12px;color:var(--suave);background:var(--vidrio);border:1px solid var(--borde);padding:6px 12px;border-radius:999px}
 
-.sala{flex:1;display:grid;grid-template-columns:minmax(150px,220px) minmax(300px,560px) minmax(150px,220px);
-  justify-content:center;align-items:center;gap:28px;padding:8px 24px 24px}
+/* Secciones (arriba a la derecha) */
+.filtros{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.filtro{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;
+  background:var(--vidrio);border:1px solid var(--borde);backdrop-filter:blur(10px)}
+.filtro:hover{background:#fff}
+.filtro:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.filtro[aria-pressed="true"]{background:var(--acento);color:#fff;border-color:var(--acento)}
 
-/* Tarjetas de vidrio con las monturas */
-.tira{display:flex;flex-direction:column;gap:12px;max-height:72vh;overflow:auto;padding:6px;scrollbar-width:none}
-.tira::-webkit-scrollbar{display:none}
-.tarjeta{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;
-  background:var(--vidrio);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border:1px solid var(--borde);border-radius:16px;padding:14px 12px 10px;
-  box-shadow:0 8px 24px rgba(60,40,20,.08);transition:transform .2s, box-shadow .2s, background .2s}
-.tarjeta:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(60,40,20,.14)}
-.tarjeta:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
-.tarjeta[aria-pressed="true"]{background:#fff;box-shadow:0 0 0 2px var(--acento),0 12px 30px rgba(60,40,20,.16)}
-.tarjeta img{width:100%;height:54px;object-fit:contain}
-.tarjeta b{font-size:12.5px;font-weight:600}
-.tarjeta span{font-size:11.5px;color:var(--suave)}
+/* Sala: la persona a la izquierda, las monturas a la derecha */
+.sala{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(250px,24vw,330px);
+  gap:20px;padding:0 24px 20px}
 
-/* Espejo */
-.espejo-wrap{display:flex;justify-content:center}
-.espejo{position:relative;width:100%;aspect-ratio:4/5;border-radius:var(--radio);overflow:hidden;
+/* Espejo: ocupa todo el espacio de la izquierda */
+.espejo-wrap{min-height:0;display:flex}
+.espejo{position:relative;flex:1;min-height:0;border-radius:var(--radio);overflow:hidden;
   background:linear-gradient(160deg,#f7f2ea,#e9dfd1);
   box-shadow:0 30px 60px rgba(60,40,20,.18), inset 0 0 0 1px rgba(255,255,255,.9)}
 #lienzo,#lienzo3d{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -48,7 +42,7 @@ body{
   text-align:center;padding:32px;gap:10px}
 .silueta{width:110px;color:#b9aa96;margin-bottom:6px}
 .vacio h1{margin:0;font-size:26px;letter-spacing:-.01em}
-.vacio p{margin:0;max-width:320px;color:var(--suave);line-height:1.45}
+.vacio p{margin:0;max-width:340px;color:var(--suave);line-height:1.45}
 .vacio small{color:var(--suave);margin-top:6px}
 .acciones{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px}
 
@@ -77,44 +71,47 @@ body{
 .ajustes label{display:flex;align-items:center;gap:6px}
 .ajustes input{width:110px;accent-color:var(--acento)}
 
-/* Barra inferior */
-.barra{margin:0 auto 22px;display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.75);
-  backdrop-filter:blur(14px);border:1px solid var(--borde);border-radius:999px;padding:8px 8px 8px 18px;
-  box-shadow:0 12px 30px rgba(60,40,20,.12);max-width:calc(100% - 32px)}
-.barra img{width:64px;height:28px;object-fit:contain}
-.binfo{display:flex;flex-direction:column;min-width:120px}
+/* Columna de monturas: se sube y se baja */
+.columna{min-height:0;display:flex;flex-direction:column;gap:12px}
+.tira{flex:1;min-height:0;display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding:4px 6px 4px 4px;
+  scroll-snap-type:y proximity;scrollbar-width:thin;scrollbar-color:rgba(43,37,32,.25) transparent}
+.tarjeta{all:unset;cursor:pointer;position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:3px;
+  background:var(--vidrio);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border:1px solid var(--borde);border-radius:16px;padding:12px 12px 10px;scroll-snap-align:start;
+  box-shadow:0 8px 24px rgba(60,40,20,.08);transition:transform .2s, box-shadow .2s, background .2s;touch-action:pan-y}
+.tarjeta:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(60,40,20,.14)}
+.tarjeta:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
+.tarjeta[aria-pressed="true"]{background:#fff;box-shadow:0 0 0 2px var(--acento),0 12px 30px rgba(60,40,20,.16)}
+.tarjeta .vista{position:relative;width:100%;aspect-ratio:2.4/1}
+.tarjeta .vista canvas{position:absolute;inset:0;width:100%;height:100%;transition:opacity .15s}
+.tarjeta .vista img{position:absolute;left:10%;top:0;width:80%;height:100%;object-fit:contain;transition:opacity .15s}
+.tarjeta .vista canvas{opacity:0}
+.tarjeta.girando .vista canvas{opacity:1}
+.tarjeta.girando .vista img{opacity:0}
+.tarjeta b{font-size:12.5px;font-weight:600}
+.tarjeta span{font-size:11.5px;color:var(--suave)}
+.tarjeta .g360{position:absolute;top:8px;right:9px;font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--suave);
+  background:rgba(255,255,255,.7);border-radius:999px;padding:2px 7px;opacity:.75}
+.tarjeta:hover .g360,.tarjeta.girando .g360{opacity:1;color:var(--tinta)}
+
+/* Ficha de la montura elegida (debajo de la lista) */
+.barra{flex:none;display:grid;grid-template-columns:72px 1fr;gap:6px 12px;align-items:center;
+  background:rgba(255,255,255,.75);backdrop-filter:blur(14px);border:1px solid var(--borde);border-radius:18px;
+  padding:12px 14px;box-shadow:0 12px 30px rgba(60,40,20,.12)}
+.barra img{width:72px;height:30px;object-fit:contain}
+.binfo{display:flex;flex-direction:column;min-width:0}
 .binfo strong{font-size:14px}
-.binfo span{font-size:12px;color:var(--suave)}
-.bmedida{display:flex;flex-direction:column;font-size:11px;color:var(--suave);padding-left:14px;border-left:1px solid rgba(0,0,0,.08)}
+.binfo span{font-size:11.5px;color:var(--suave);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bfila{grid-column:1/-1;display:flex;align-items:center;gap:12px}
+.bmedida{display:flex;flex-direction:column;font-size:10.5px;color:var(--suave)}
+.bmedida+.bmedida{padding-left:12px;border-left:1px solid rgba(0,0,0,.08)}
 .bmedida strong{font-size:13px;color:var(--tinta)}
 .encaje strong.ok{color:#2f6b3a}.encaje strong.ancha,.encaje strong.angosta{color:#9a5a12}
-.bprecio{display:flex;flex-direction:column;align-items:flex-end}
+.bprecio{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end}
 .bprecio s{font-size:11px;color:var(--suave)}
 .bprecio strong{font-size:15px}
-
-/* Celular */
-@media (max-width:860px){
-  .top{padding:14px 16px}
-  .aviso{display:none}
-  .sala{grid-template-columns:1fr;gap:12px;padding:0 12px 12px}
-  .espejo-wrap{order:1}
-  #tiraIzq{order:2}
-  #tiraDer{order:3}
-  .tira{flex-direction:row;max-height:none;overflow-x:auto;padding:4px 2px}
-  .tarjeta{min-width:118px}
-  .barra{border-radius:20px;flex-wrap:wrap;gap:10px 14px;padding:12px;justify-content:space-between;margin:0 12px 16px;max-width:none}
-  .barra .btn{flex:1 1 100%}
-  .bmedida{padding-left:10px}
-}
-
-/* Filtros */
-.filtros{display:flex;justify-content:center;gap:8px;padding:0 16px 10px;flex-wrap:wrap}
-.filtro{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:8px 16px;border-radius:999px;
-  background:var(--vidrio);border:1px solid var(--borde);backdrop-filter:blur(10px)}
-.filtro:hover{background:#fff}
-.filtro:focus-visible{outline:2px solid var(--acento);outline-offset:2px}
-.filtro[aria-pressed="true"]{background:var(--acento);color:#fff;border-color:var(--acento)}
-@media (max-width:860px){.filtros{order:0;padding:0 12px 10px}}
+.barra .btn{grid-column:1/-1;padding:10px 16px}
+.fuente{grid-column:1/-1;text-align:center;font-size:10.5px;color:var(--suave)}
 
 /* Indicador de tamaño real y DP */
 .escala{all:unset;cursor:pointer;position:absolute;left:12px;right:12px;top:12px;margin:0 auto;width:fit-content;max-width:calc(100% - 24px);
@@ -126,3 +123,14 @@ body{
 .ajustes .dp label{font-weight:600}
 .ajustes .dp input{width:70px;padding:6px 8px;border:1px solid rgba(0,0,0,.15);border-radius:8px;font:inherit}
 .ajustes .dp small{color:var(--suave);max-width:300px;line-height:1.35}
+
+/* Celular */
+@media (max-width:860px){
+  body{height:auto;min-height:100vh;overflow:auto}
+  .top{flex-direction:column;align-items:flex-start;gap:10px;padding:14px 12px 10px}
+  .filtros{justify-content:flex-start}
+  .sala{display:flex;flex-direction:column;gap:12px;padding:0 12px 16px}
+  .espejo{flex:none;width:100%;aspect-ratio:4/5}
+  .tira{flex-direction:row;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;padding:4px 2px}
+  .tarjeta{width:150px;touch-action:pan-x}
+}

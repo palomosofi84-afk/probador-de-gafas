@@ -5,9 +5,9 @@ window.CATALOGO = [
   "altoPataMm": 5.8,
   "largoPataMm": 145,
   "colorPata": [
-   227,
-   200,
-   158
+   226,
+   199,
+   157
   ],
   "pata": "gafas/9960_pata.jpg",
   "lente": "gafas/9960_lente.png",
@@ -53,9 +53,9 @@ window.CATALOGO = [
   "altoPataMm": 6.9,
   "largoPataMm": 145,
   "colorPata": [
-   118,
-   134,
-   77
+   117,
+   133,
+   76
   ],
   "pata": "gafas/12910_pata.jpg",
   "lente": "gafas/12910_lente.png",
@@ -101,9 +101,9 @@ window.CATALOGO = [
   "altoPataMm": 3.2,
   "largoPataMm": 150,
   "colorPata": [
-   187,
-   189,
-   185
+   186,
+   188,
+   184
   ],
   "pata": "gafas/6692_pata.jpg",
   "lente": "gafas/6692_lente.png",
@@ -125,9 +125,9 @@ window.CATALOGO = [
   "altoPataMm": 2.9,
   "largoPataMm": 144,
   "colorPata": [
-   163,
-   154,
-   139
+   102,
+   89,
+   83
   ],
   "pata": "gafas/6800_pata.jpg",
   "lente": "gafas/6800_lente.png",
@@ -149,9 +149,9 @@ window.CATALOGO = [
   "altoPataMm": 2.5,
   "largoPataMm": 141,
   "colorPata": [
-   38,
-   38,
-   38
+   37,
+   37,
+   36
   ],
   "pata": "gafas/7792_pata.jpg",
   "lente": "gafas/7792_lente.png",
@@ -173,9 +173,9 @@ window.CATALOGO = [
   "altoPataMm": 7.5,
   "largoPataMm": 145,
   "colorPata": [
-   178,
-   142,
-   117
+   177,
+   141,
+   116
   ],
   "pata": "gafas/9316_pata.jpg",
   "lente": "gafas/9316_lente.png",
@@ -197,9 +197,9 @@ window.CATALOGO = [
   "altoPataMm": 7.2,
   "largoPataMm": 142,
   "colorPata": [
-   219,
-   190,
-   171
+   217,
+   188,
+   169
   ],
   "pata": "gafas/9543_pata.jpg",
   "lente": "gafas/9543_lente.png",
@@ -221,9 +221,9 @@ window.CATALOGO = [
   "altoPataMm": 4.7,
   "largoPataMm": 145,
   "colorPata": [
-   25,
-   25,
-   26
+   24,
+   24,
+   25
   ],
   "pata": "gafas/9838_pata.jpg",
   "lente": "gafas/9838_lente.png",
@@ -269,9 +269,9 @@ window.CATALOGO = [
   "altoPataMm": 3.5,
   "largoPataMm": 135,
   "colorPata": [
-   155,
-   54,
-   60
+   152,
+   49,
+   55
   ],
   "pata": "gafas/10435_pata.jpg",
   "lente": "gafas/10435_lente.png",
@@ -293,7 +293,7 @@ window.CATALOGO = [
   "altoPataMm": 7.5,
   "largoPataMm": 145,
   "colorPata": [
-   100,
+   98,
    14,
    18
   ],
@@ -341,7 +341,7 @@ window.CATALOGO = [
   "altoPataMm": 5.6,
   "largoPataMm": 140,
   "colorPata": [
-   49,
+   48,
    42,
    39
   ],
@@ -365,7 +365,7 @@ window.CATALOGO = [
   "altoPataMm": 4.9,
   "largoPataMm": 141,
   "colorPata": [
-   43,
+   42,
    30,
    29
   ],
@@ -389,9 +389,9 @@ window.CATALOGO = [
   "altoPataMm": 2.1,
   "largoPataMm": 138,
   "colorPata": [
-   184,
-   147,
-   115
+   176,
+   132,
+   97
   ],
   "pata": "gafas/4875_pata.jpg",
   "lente": "gafas/4875_lente.png",
@@ -413,7 +413,7 @@ window.CATALOGO = [
   "altoPataMm": 7.5,
   "largoPataMm": 145,
   "colorPata": [
-   36,
+   35,
    32,
    31
   ],
@@ -438,8 +438,8 @@ window.CATALOGO = [
   "largoPataMm": 150,
   "colorPata": [
    45,
-   48,
-   50
+   47,
+   49
   ],
   "pata": "gafas/6238_pata.jpg",
   "lente": "gafas/6238_lente.png",
@@ -463,7 +463,7 @@ window.CATALOGO = [
   "colorPata": [
    43,
    39,
-   40
+   39
   ],
   "pata": "gafas/11469_pata.jpg",
   "lente": "gafas/11469_lente.png",
@@ -485,9 +485,9 @@ window.CATALOGO = [
   "altoPataMm": 3.3,
   "largoPataMm": 146,
   "colorPata": [
-   165,
-   151,
-   143
+   143,
+   124,
+   114
   ],
   "pata": "gafas/8256_pata.jpg",
   "lente": "gafas/8256_lente.png",
@@ -533,9 +533,9 @@ window.CATALOGO = [
   "altoPataMm": 5.2,
   "largoPataMm": 145,
   "colorPata": [
-   115,
-   112,
-   77
+   113,
+   110,
+   76
   ],
   "pata": "gafas/8943_pata.jpg",
   "lente": "gafas/8943_lente.png",
@@ -558,7 +558,7 @@ window.CATALOGO = [
   "largoPataMm": 154,
   "colorPata": [
    82,
-   104,
+   103,
    32
   ],
   "pata": "gafas/14250_pata.jpg",
@@ -581,9 +581,9 @@ window.CATALOGO = [
   "altoPataMm": 3.0,
   "largoPataMm": 151,
   "colorPata": [
-   204,
+   203,
    196,
-   192
+   191
   ],
   "pata": "gafas/6851_pata.jpg",
   "lente": "gafas/6851_lente.png",
@@ -605,9 +605,9 @@ window.CATALOGO = [
   "altoPataMm": 2.9,
   "largoPataMm": 140,
   "colorPata": [
-   68,
-   52,
-   44
+   66,
+   50,
+   42
   ],
   "pata": "gafas/14258_pata.jpg",
   "lente": "gafas/14258_lente.png",
@@ -701,7 +701,7 @@ window.CATALOGO = [
   "altoPataMm": 7.5,
   "largoPataMm": 145,
   "colorPata": [
-   190,
+   189,
    189,
    187
   ],
@@ -725,7 +725,7 @@ window.CATALOGO = [
   "altoPataMm": 3.4,
   "largoPataMm": 145,
   "colorPata": [
-   36,
+   35,
    19,
    21
   ],
@@ -773,9 +773,9 @@ window.CATALOGO = [
   "altoPataMm": 4.1,
   "largoPataMm": 145,
   "colorPata": [
-   82,
-   39,
-   38
+   81,
+   38,
+   37
   ],
   "pata": "gafas/4703_pata.jpg",
   "lente": "gafas/4703_lente.png",
@@ -797,8 +797,8 @@ window.CATALOGO = [
   "altoPataMm": 5.3,
   "largoPataMm": 145,
   "colorPata": [
-   186,
-   103,
+   183,
+   101,
    5
   ],
   "pata": "gafas/11633_pata.jpg",
@@ -821,9 +821,9 @@ window.CATALOGO = [
   "altoPataMm": 5.3,
   "largoPataMm": 145,
   "colorPata": [
-   55,
-   38,
-   32
+   53,
+   37,
+   31
   ],
   "pata": "gafas/12126_pata.jpg",
   "lente": "gafas/12126_lente.png",
@@ -869,8 +869,8 @@ window.CATALOGO = [
   "altoPataMm": 7.5,
   "largoPataMm": 145,
   "colorPata": [
-   55,
-   47,
+   54,
+   46,
    42
   ],
   "pata": "gafas/13286_pata.jpg",
@@ -893,7 +893,7 @@ window.CATALOGO = [
   "altoPataMm": 5.8,
   "largoPataMm": 145,
   "colorPata": [
-   77,
+   76,
    61,
    55
   ],
@@ -917,7 +917,7 @@ window.CATALOGO = [
   "altoPataMm": 7.5,
   "largoPataMm": 145,
   "colorPata": [
-   113,
+   110,
    53,
    36
   ],
@@ -965,9 +965,9 @@ window.CATALOGO = [
   "altoPataMm": 7.5,
   "largoPataMm": 147,
   "colorPata": [
-   114,
-   98,
-   113
+   112,
+   97,
+   111
   ],
   "pata": "gafas/11930_pata.jpg",
   "lente": "gafas/11930_lente.png",

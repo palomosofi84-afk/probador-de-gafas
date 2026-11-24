@@ -15,19 +15,15 @@
 <body>
 <header class="top">
   <div class="marca">PROBADOR<span>de gafas</span></div>
-  <div class="aviso">Demo · catálogo de firmoo.com.co</div>
+  <nav class="filtros" id="filtros" aria-label="Filtrar monturas">
+    <button class="filtro" data-f="todas" aria-pressed="true">Todas</button>
+    <button class="filtro" data-f="mujer" aria-pressed="false">Mujer</button>
+    <button class="filtro" data-f="hombre" aria-pressed="false">Hombre</button>
+    <button class="filtro" data-f="sol" aria-pressed="false">De sol</button>
+  </nav>
 </header>
 
-<nav class="filtros" id="filtros" aria-label="Filtrar monturas">
-  <button class="filtro" data-f="todas" aria-pressed="true">Todas</button>
-  <button class="filtro" data-f="mujer" aria-pressed="false">Mujer</button>
-  <button class="filtro" data-f="hombre" aria-pressed="false">Hombre</button>
-  <button class="filtro" data-f="sol" aria-pressed="false">De sol</button>
-</nav>
-
 <main class="sala">
-  <aside class="tira" id="tiraIzq" aria-label="Monturas"></aside>
-
   <section class="espejo-wrap">
     <div class="espejo" id="espejo">
       <canvas id="lienzo" aria-label="Tu cara con las gafas puestas"></canvas>
@@ -75,24 +71,28 @@
     </div>
   </section>
 
-  <aside class="tira" id="tiraDer" aria-label="Más monturas"></aside>
+  <aside class="columna" aria-label="Monturas">
+    <div class="tira" id="tira"></div>
+    <div class="barra" id="barra">
+      <img id="bImg" alt="">
+      <div class="binfo">
+        <strong id="bNombre"></strong>
+        <span id="bTipo"></span>
+      </div>
+      <div class="bfila">
+        <div class="bmedida" title="Ancho total de la montura">
+          <span>Ancho</span><strong id="bAncho"></strong>
+        </div>
+        <div class="bmedida encaje" id="bEncajeBox" hidden title="Comparado con el ancho de tu cara">
+          <span>En tu cara</span><strong id="bEncaje"></strong>
+        </div>
+        <div class="bprecio"><s id="bAntes"></s><strong id="bPrecio"></strong></div>
+      </div>
+      <a class="btn primario" id="bLink" target="_blank" rel="noopener">Ver en la tienda</a>
+      <small class="fuente">Demo · catálogo de firmoo.com.co</small>
+    </div>
+  </aside>
 </main>
-
-<footer class="barra" id="barra">
-  <img id="bImg" alt="">
-  <div class="binfo">
-    <strong id="bNombre"></strong>
-    <span id="bTipo"></span>
-  </div>
-  <div class="bmedida" title="Ancho total de la montura">
-    <span>Ancho</span><strong id="bAncho"></strong>
-  </div>
-  <div class="bmedida encaje" id="bEncajeBox" hidden title="Comparado con el ancho de tu cara">
-    <span>En tu cara</span><strong id="bEncaje"></strong>
-  </div>
-  <div class="bprecio"><s id="bAntes"></s><strong id="bPrecio"></strong></div>
-  <a class="btn primario" id="bLink" target="_blank" rel="noopener">Ver en la tienda</a>
-</footer>
 
 <script src="catalogo.js"></script>
 <script type="module" src="probador.js"></script>

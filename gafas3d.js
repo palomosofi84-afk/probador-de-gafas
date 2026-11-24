@@ -184,6 +184,7 @@ export function crearVisor3D(canvas, alCargar = () => {}) {
    * @param o.gafa     ficha del catálogo (con _img cargada)
    * @param o.ajYmm    ajuste de altura
    * @param o.caraMm   ancho de la cara
+   * @param o.producto true = vista de producto (sin cabeza, con las dos patas)
    */
   function dibujar(o) {
     if (renderer.domElement.width !== o.W || renderer.domElement.height !== o.H) renderer.setSize(o.W, o.H, false);
@@ -218,8 +219,10 @@ export function crearVisor3D(canvas, alCargar = () => {}) {
     // queda hacia la cámara). ejes.z.x > 0 = la cara mira hacia la derecha de la imagen.
     const giro = Math.asin(Math.max(-1, Math.min(1, o.ejes.z.x))) * 180 / Math.PI;
     const aparecer = (g) => Math.min(1, Math.max(0, (g - 9) / 12));
-    lados[-1].forEach((mt) => (mt.opacity = aparecer(giro)));
-    lados[1].forEach((mt) => (mt.opacity = aparecer(-giro)));
+    // Vista de producto (giro 360° en la tarjeta): sin cabeza, las dos patas a la vista
+    [cabeza, orejaI, orejaD].forEach((x) => (x.visible = !o.producto));
+    lados[-1].forEach((mt) => (mt.opacity = o.producto ? 1 : aparecer(giro)));
+    lados[1].forEach((mt) => (mt.opacity = o.producto ? 1 : aparecer(-giro)));
     [cabeza, orejaI, orejaD].forEach((x) => x.updateMatrix());
 
     const v = (a) => new THREE.Vector3(a.x, a.y, a.z);

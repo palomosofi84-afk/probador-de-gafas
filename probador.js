@@ -52,21 +52,107 @@ function filtrar(f) {
   elegir(visibles.includes(estado.sel) ? estado.sel : visibles[0]);
 }
 function pintarTarjetas() {
-  const mitad = Math.ceil(visibles.length / 2);
-  [$("tiraIzq"), $("tiraDer")].forEach((tira, t) => {
-    tira.innerHTML = "";
-    tira.scrollTo(0, 0);
-    visibles.slice(t ? mitad : 0, t ? undefined : mitad).forEach((i) => {
-      const g = catalogo[i];
-      const b = document.createElement("button");
-      b.className = "tarjeta";
-      b.dataset.i = i;
-      b.setAttribute("aria-pressed", i === estado.sel);
-      b.innerHTML = `<img src="${g.img}" alt="" loading="lazy"><b>${g.nombre}</b><span>${cop(g.precio)}</span>`;
-      b.onclick = () => elegir(i);
-      tira.appendChild(b);
-    });
+  const tira = $("tira");
+  tira.innerHTML = "";
+  tira.scrollTo(0, 0);
+  visibles.forEach((i) => {
+    const g = catalogo[i];
+    const b = document.createElement("button");
+    b.className = "tarjeta";
+    b.dataset.i = i;
+    b.setAttribute("aria-pressed", i === estado.sel);
+    b.title = "Arrastra o pasa el mouse para girarla 360°";
+    b.innerHTML = `<span class="g360" aria-hidden="true">360°</span>
+      <div class="vista"><img src="${g.img}" alt="" loading="lazy"><canvas></canvas></div>
+      <b>${g.nombre}</b><span>${cop(g.precio)}</span>`;
+    b.onclick = () => { if (!giro.arrastro) elegir(i); };
+    prepararGiro(b, g);
+    tira.appendChild(b);
   });
+}
+
+/* ---------- Giro 360° de cada montura en su tarjeta ---------- */
+// Un solo visor 3D (fuera de pantalla) dibuja la tarjeta que se está girando
+// y se copia a su lienzo: así no hacen falta 41 contextos WebGL.
+const giro = { visor: null, lienzo: null, tarjeta: null, g: null, ang: 0, auto: false, arrastre: null, arrastro: false, t: 0, raf: 0 };
+function ejesGiro(th) {
+  const fi = 0;    // a la altura de los ojos: de frente coincide con la foto fija
+  const s = Math.sin(th), c = Math.cos(th), sf = Math.sin(fi), cf = Math.cos(fi);
+  return { x: { x: c, y: 0, z: -s }, y: { x: s * sf, y: cf, z: c * sf }, z: { x: s * cf, y: -sf, z: c * cf } };
+}
+function pintarGiro() {
+  const { tarjeta, g, visor } = giro;
+  if (!tarjeta || !visor) return;
+  const im = estado.imgs[g.id];
+  if (!im || !im.complete || !im.naturalWidth) return;
+  g._img = im;
+  const cv = tarjeta.querySelector("canvas");
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const W = Math.round(cv.clientWidth * dpr), H = Math.round(cv.clientHeight * dpr);
+  if (!W || !H) return;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const largo = g.largoPataMm || 145;
+  // misma escala y posición que la foto fija de la tarjeta (80% del ancho, centrada),
+  // así al empezar a girar no hay salto; de lado, las patas caben en la tarjeta
+  const esc = W * 0.8 / g.anchoMm;
+  const altoMm = g.anchoMm * im.naturalHeight / im.naturalWidth;
+  const ejes = ejesGiro(giro.ang);
+  // girar alrededor del centro de la gafa (a mitad de las patas), no de las pupilas
+  const zc = -(largo / 2 - 12);
+  const cx = W / 2, cy = H / 2 - (0.5 - 0.46) * altoMm * esc;   // 0.46 = altura de la pupila en la foto
+  visor.dibujar({
+    W, H, gafa: g, producto: true, ejes, esc,
+    pos: { x: cx - zc * esc * ejes.z.x, y: cy + zc * esc * ejes.z.y },
+    centro: { x: cx, y: cy }, focal: W * 6, ajYmm: 0, caraMm: 0,
+  });
+  const c2 = cv.getContext("2d");
+  c2.clearRect(0, 0, W, H);
+  c2.drawImage(giro.lienzo, 0, 0);
+}
+function bucleGiro(t) {
+  const dt = giro.t ? Math.min(50, t - giro.t) : 16;
+  giro.t = t;
+  if (giro.auto && !giro.arrastre) giro.ang += dt * 0.0016;   // ~1 vuelta cada 4 s
+  pintarGiro();
+  giro.raf = giro.tarjeta ? requestAnimationFrame(bucleGiro) : 0;
+}
+function empezarGiro(b, g, auto) {
+  if (!giro.visor) return;
+  if (giro.tarjeta && giro.tarjeta !== b) giro.tarjeta.classList.remove("girando");
+  if (giro.tarjeta !== b) giro.ang = 0;
+  giro.tarjeta = b; giro.g = g; giro.auto = auto;
+  b.classList.add("girando");
+  if (!giro.raf) { giro.t = 0; giro.raf = requestAnimationFrame(bucleGiro); }
+}
+function pararGiro(b) {
+  if (giro.tarjeta !== b || giro.arrastre) return;
+  b.classList.remove("girando");
+  giro.tarjeta = null;
+}
+function prepararGiro(b, g) {
+  b.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") empezarGiro(b, g, true); });
+  b.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") pararGiro(b); });
+  b.addEventListener("pointerdown", (e) => {
+    giro.arrastro = false;
+    giro.arrastre = { x: e.clientX, ang: giro.tarjeta === b ? giro.ang : 0, id: e.pointerId };
+    empezarGiro(b, g, false);
+  });
+  b.addEventListener("pointermove", (e) => {
+    const a = giro.arrastre;
+    if (!a || a.id !== e.pointerId || giro.tarjeta !== b) return;
+    const dx = e.clientX - a.x;
+    if (Math.abs(dx) > 6 && !giro.arrastro) { giro.arrastro = true; b.setPointerCapture(e.pointerId); }
+    if (giro.arrastro) giro.ang = a.ang + dx * 0.022;
+  });
+  const soltar = (e) => {
+    if (!giro.arrastre || giro.arrastre.id !== e.pointerId) return;
+    giro.arrastre = null;
+    if (e.pointerType === "mouse") giro.auto = !giro.arrastro && b.matches(":hover");
+    else if (!giro.arrastro) giro.auto = true;          // en el celular: un toque la hace girar
+    setTimeout(() => (giro.arrastro = false), 0);
+  };
+  b.addEventListener("pointerup", soltar);
+  b.addEventListener("pointercancel", (e) => { soltar(e); pararGiro(b); });
 }
 function mover(paso) {
   const k = visibles.indexOf(estado.sel);
@@ -74,7 +160,11 @@ function mover(paso) {
 }
 function elegir(i) {
   estado.sel = i;
-  document.querySelectorAll(".tarjeta").forEach((b) => b.setAttribute("aria-pressed", +b.dataset.i === estado.sel));
+  document.querySelectorAll(".tarjeta").forEach((b) => {
+    const on = +b.dataset.i === estado.sel;
+    b.setAttribute("aria-pressed", on);
+    if (on) b.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+  });
   const g = catalogo[estado.sel];
   $("bImg").src = g.img;
   $("bNombre").textContent = g.nombre;
@@ -430,6 +520,10 @@ new ResizeObserver(dibujar).observe(lienzo);
 document.querySelectorAll(".filtro").forEach((b) => (b.onclick = () => filtrar(b.dataset.f)));
 pintarTarjetas(); cargarImgs(); elegir(0);
 import("./gafas3d.js")
-  .then((m) => { visor = m.crearVisor3D(lienzo3d, () => requestAnimationFrame(dibujar)); dibujar(); })
+  .then((m) => {
+    visor = m.crearVisor3D(lienzo3d, () => requestAnimationFrame(dibujar)); dibujar();
+    try { giro.lienzo = document.createElement("canvas"); giro.visor = m.crearVisor3D(giro.lienzo, pintarGiro); }
+    catch (e) { console.warn("Sin giro 360°:", e); }
+  })
   .catch((e) => { console.warn("Sin 3D, se usa la vista plana:", e); lienzo3d.hidden = true; });
 detector().catch(() => {});   // ir cargando el modelo mientras la persona elige foto

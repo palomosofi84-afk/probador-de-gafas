@@ -1,6 +1,7 @@
 """Descarga la foto frontal de cada montura de Firmoo, quita el fondo blanco
 (incluido el blanco dentro de los lentes) y recorta al borde de la montura.
-Genera gafas/<id>.png y catalogo.js."""
+Genera gafas/<id>.png y catalogo.js.
+Uso: python tools/preparar_gafas.py [--todo | --limpiar]"""
 import io, json, os, sys, urllib.request
 import numpy as np
 from PIL import Image
@@ -94,6 +95,109 @@ def quitar_fondo(im: Image.Image) -> Image.Image:
     return out.crop((x0, y0, x1 + 1, y1 + 1))
 
 
+def limpiar(im: Image.Image) -> Image.Image:
+    """Deja la montura lista para ponerla sobre una cara:
+    1. borra lo que flota dentro de los lentes (puntas de las patas y plaquetas
+       que se ven a través del lente en la foto frontal);
+    2. borra los restos de pata pegados al aro por dentro del lente: salientes
+       mucho más claros que el aro (lo del mismo color es parte del marco);
+    3. borra motas sueltas alrededor de la montura;
+    4. quita el filo blanco: los píxeles transparentes guardaban el blanco del
+       fondo y, al escalar la imagen en el navegador, ese blanco se colaba en el
+       borde. Solo se cambia el color de lo invisible; lo visible queda igual."""
+    from skimage.morphology import convex_hull_image
+    a = np.asarray(im.convert("RGBA")).astype(np.float32)
+    rgb, alpha = a[..., :3], a[..., 3] / 255
+    lum = rgb.mean(axis=2)
+    h, w = alpha.shape
+    original = alpha.copy()
+    frame = alpha > 0.25
+    huecos = ndi.binary_opening(ndi.binary_fill_holes(frame) & ~frame, iterations=2)
+    # 1. islas sueltas dentro de cada lente
+    lab, n = ndi.label(huecos)
+    for k in range(1, n + 1):
+        hueco = lab == k
+        if hueco.sum() < 0.004 * h * w:
+            continue
+        dentro = ndi.binary_erosion(convex_hull_image(hueco), iterations=3)
+        islas, m = ndi.label(frame & dentro)
+        borde = dentro & ~ndi.binary_erosion(dentro)
+        for j in range(1, m + 1):
+            isla = islas == j
+            if not (isla & borde).any():
+                alpha[ndi.binary_dilation(isla, iterations=2) & dentro] = 0
+    # 2. salientes claros pegados al aro
+    frame = alpha > 0.25
+    r = int(w * 0.06)
+    # cierre con un disco de radio r (con distancias: rápido aunque r sea grande)
+    ancho = ndi.distance_transform_edt(~np.pad(huecos, r + 1)) <= r
+    cerrado = (ndi.distance_transform_edt(ancho) > r)[r + 1:-r - 1, r + 1:-r - 1] | huecos
+    saliente = cerrado & frame & ~huecos
+    aro = frame & ~saliente & ndi.binary_dilation(huecos, iterations=12)
+    if aro.any() and saliente.any():
+        lum_aro = np.median(lum[aro])
+        lab, n = ndi.label(saliente)
+        for k in range(1, n + 1):
+            pieza = lab == k
+            claro = pieza & (lum > lum_aro + 50)
+            if claro.sum() > 0.3 * pieza.sum() or np.median(lum[pieza]) > lum_aro + 60:
+                quitar = ndi.binary_dilation(claro, iterations=2) & cerrado
+                alpha[quitar] = 0
+        # restos grises grandes (bisagra vista a través del lente): dentro de la
+        # forma convexa de cada lente, lo gris y mucho más claro que el aro
+        sat = rgb.max(axis=2) - rgb.min(axis=2)
+        lab, n = ndi.label(huecos)
+        for k in range(1, n + 1):
+            hueco = lab == k
+            if hueco.sum() < 0.004 * h * w:
+                continue
+            casco = convex_hull_image(hueco)
+            gris = casco & (alpha > 0.05) & (lum > lum_aro + 60) & (sat < 40)
+            alpha[ndi.binary_dilation(gris, iterations=2) & casco] = 0
+    # 3. motas sueltas
+    lab, n = ndi.label(alpha > 0.05)
+    if n > 1:
+        tam = ndi.sum(np.ones_like(alpha), lab, range(1, n + 1))
+        for k, t in enumerate(tam, 1):
+            if t < 0.02 * tam.max():
+                alpha[lab == k] = 0
+    # 5. reflejo de la mesa: franja gris clara en las últimas filas de la foto,
+    #    separada de la montura por una fila casi vacía
+    filas = alpha.mean(axis=1)
+    abajo = max(8, int(h * 0.06))
+    y0 = h - abajo + int(np.argmin(filas[h - abajo:]))
+    if h - y0 <= 14:
+        sat = rgb.max(axis=2) - rgb.min(axis=2)
+        reflejo = np.zeros_like(alpha, bool)
+        reflejo[y0:] = (lum[y0:] > 140) & (sat[y0:] < 40)
+        # debajo de esa fila solo sigue lo que viene de la montura de arriba
+        reflejo[y0 + 1:] |= ~(alpha[y0] > 0.5)[None, :]
+        alpha[reflejo] = 0
+    # bordes de lo borrado: suaves, sin escalón (lo demás queda intacto,
+    # así no se pierden los alambres finos de las monturas de metal)
+    borrado = ndi.binary_dilation((original > 0.05) & (alpha == 0), iterations=2)
+    suave = np.minimum(alpha, ndi.uniform_filter(alpha, 3) * 1.6)
+    alpha = np.where(borrado, suave, alpha)
+    # 6. filo claro por fuera: en la foto, el borde exterior de la montura refleja
+    #    el fondo blanco y queda como una línea clara. Se le da el color del marco
+    #    que tiene justo adentro (solo en monturas con grosor; los brillos del
+    #    bisel interior, hacia el lente, se dejan: son reales).
+    lleno = ndi.binary_fill_holes(alpha > 0.25)
+    afuera = ndi.binary_dilation(~lleno, iterations=5)
+    nucleo = ndi.binary_erosion(alpha > 0.9, iterations=3)
+    if nucleo.any():
+        dist, (iy, ix) = ndi.distance_transform_edt(~nucleo, return_indices=True)
+        filo = (alpha > 0.05) & ~nucleo & (dist <= 5) & afuera
+        oscuro = lum[iy, ix] < lum - 25
+        cambia = filo & oscuro
+        rgb = np.where(cambia[..., None], rgb[iy, ix], rgb)
+    # 4. color de lo invisible = color de la montura más cercana
+    visible = alpha > 0.05
+    _, (iy, ix) = ndi.distance_transform_edt(~visible, return_indices=True)
+    rgb = np.where(visible[..., None], rgb, rgb[iy, ix])
+    return Image.fromarray(np.dstack([rgb, alpha * 255]).clip(0, 255).astype(np.uint8), "RGBA")
+
+
 def analizar_3d(gid, ancho_mm, talla):
     """Datos para armar la gafa en 3D a partir de su foto frontal ya recortada:
     altura de la bisagra, grosor y color de la pata, y la máscara de los lentes."""
@@ -171,12 +275,14 @@ def main():
     for kind, gid, color, nombre, precio, antes, material, genero, talla, ancho, h in CATALOGO:
         destino = os.path.join(BASE, "gafas", f"{gid}.png")
         if os.path.exists(destino) and "--todo" not in sys.argv:
+            if "--limpiar" in sys.argv:   # repasar las fotos ya descargadas
+                limpiar(Image.open(destino)).save(destino, optimize=True)
             items.append(ficha(kind, gid, color, nombre, precio, antes, material, genero, talla, ancho))
             continue
         url = f"{CDN}/{gid}/2-{h}.jpg"
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         im = Image.open(io.BytesIO(urllib.request.urlopen(req, timeout=30).read()))
-        png = quitar_fondo(im)
+        png = limpiar(quitar_fondo(im))
         png.save(destino, optimize=True)
         items.append(ficha(kind, gid, color, nombre, precio, antes, material, genero, talla, ancho))
         print(gid, nombre, png.size)
