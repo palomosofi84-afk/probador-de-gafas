@@ -23,7 +23,9 @@ const lienzo = $("lienzo"), ctx = lienzo.getContext("2d");
 const lienzo3d = $("lienzo3d");
 let visor = null;   // visor 3D (si el navegador tiene WebGL)
 const video = $("video");
-const catalogo = (window.CATALOGO || []).filter((g) => !g.sol);   // sin gafas de sol
+// Sin gafas de sol, ni monturas con lente oscuro que la tienda no marca como de sol
+const QUITAR = ["AC12437", "FM2664"];
+const catalogo = (window.CATALOGO || []).filter((g) => !g.sol && !QUITAR.includes(g.nombre));
 
 const estado = {
   sel: 0,
