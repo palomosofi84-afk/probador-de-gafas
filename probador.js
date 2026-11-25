@@ -2,8 +2,12 @@
 // mide la escala real con el iris y pone la montura a su ancho real en mm.
 import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
 
-const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
-const MODELO = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+// El modelo y su motor van dentro de la app (vendor/), así funciona también
+// publicada, donde la página no puede descargar archivos de otros sitios.
+const WASM = new URL("./vendor/wasm", import.meta.url).href;
+// el modelo va como texto base64 dentro de un .js (el servidor no sirve archivos .task)
+const modeloBytes = () => import("./vendor/modelo_cara.js")
+  .then((m) => Uint8Array.from(atob(m.default), (c) => c.charCodeAt(0)));
 const HEIC_LIB = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
 
 const IRIS_MM = 11.7;      // diámetro medio del iris humano
@@ -19,7 +23,7 @@ const lienzo = $("lienzo"), ctx = lienzo.getContext("2d");
 const lienzo3d = $("lienzo3d");
 let visor = null;   // visor 3D (si el navegador tiene WebGL)
 const video = $("video");
-const catalogo = window.CATALOGO || [];
+const catalogo = (window.CATALOGO || []).filter((g) => !g.sol);   // sin gafas de sol
 
 const estado = {
   sel: 0,
@@ -185,9 +189,9 @@ let detectorP = null, modoDetector = null;
 function detector() {
   if (!detectorP) {
     detectorP = (async () => {
-      const files = await FilesetResolver.forVisionTasks(WASM);
+      const [files, modelo] = await Promise.all([FilesetResolver.forVisionTasks(WASM), modeloBytes()]);
       const crear = (delegate) => FaceLandmarker.createFromOptions(files, {
-        baseOptions: { modelAssetPath: MODELO, delegate },
+        baseOptions: { modelAssetBuffer: modelo, delegate },
         runningMode: "IMAGE", numFaces: 1,
       });
       let d;
@@ -502,11 +506,35 @@ $("btnBajar").onclick = () => {
     o.drawImage(lienzo3d, 0, 0);
     o.restore();
   }
-  out.toBlob((b) => {
+  const nombre = `probador-${catalogo[estado.sel].nombre}.jpg`;
+  out.toBlob(async (b) => {
+    if (descargas) {
+      // publicada en Claude: la descarga la ofrece la plataforma
+      try { await descargas.save({ filename: nombre, data: b }); }
+      catch (e) { if (e?.code !== "declined") mostrarEstado("No se pudo guardar la foto aquí.", true); }
+      return;
+    }
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(b); a.download = `probador-${catalogo[estado.sel].nombre}.jpg`; a.click();
+    a.href = URL.createObjectURL(b); a.download = nombre; a.click();
   }, "image/jpeg", 0.92);
 };
+// Publicada en Claude no se permite la cámara en vivo: el botón Cámara abre la
+// cámara del celular para tomarse una foto (en computador abre el selector de archivos).
+// Las descargas van por la plataforma.
+let descargas = null;
+const enClaude = !!window.claude?.use;
+let enMarco = false; try { enMarco = window.self !== window.top; } catch { enMarco = true; }
+const sinVivo = enClaude || enMarco || (document.featurePolicy && !document.featurePolicy.allowsFeature("camera"));
+if (sinVivo) {
+  const tomar = () => $("archivoCam").click();
+  $("btnCamara").onclick = tomar; $("btnCamara2").onclick = tomar;
+  $("btnCamara").textContent = "Tomarme una foto";
+  $("archivoCam").onchange = (e) => { usarFoto(e.target.files[0]); e.target.value = ""; };
+}
+if (enClaude) {
+  $("btnBajar").hidden = true;
+  window.claude.use("downloads").then((d) => { descargas = d; if (d) $("btnBajar").hidden = false; }).catch(() => {});
+}
 document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT") return;
   if (e.key === "ArrowRight") mover(1);

@@ -19,7 +19,6 @@
     <button class="filtro" data-f="todas" aria-pressed="true">Todas</button>
     <button class="filtro" data-f="mujer" aria-pressed="false">Mujer</button>
     <button class="filtro" data-f="hombre" aria-pressed="false">Hombre</button>
-    <button class="filtro" data-f="sol" aria-pressed="false">De sol</button>
   </nav>
 </header>
 
@@ -44,6 +43,7 @@
         <div class="acciones">
           <label class="btn primario">Subir mi foto<input type="file" id="archivo" accept="image/*,.heic,.heif" hidden></label>
           <button class="btn" id="btnCamara">Usar mi cámara</button>
+          <input type="file" id="archivoCam" accept="image/*" capture="user" hidden>
         </div>
         <small>🔒 Tu foto no sale de tu dispositivo.</small>
       </div>
